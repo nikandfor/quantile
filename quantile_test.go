@@ -9,7 +9,96 @@ import (
 	"testing"
 
 	"github.com/beorn7/perks/quantile"
+	"github.com/stretchr/testify/assert"
 )
+
+func TestSmallSet(t *testing.T) {
+	const E = 0.01
+
+	s := New(E)
+
+	s.Insert(2)
+
+	assert.InEpsilon(t, 2, s.Query(0), E)
+	assert.InEpsilon(t, 2, s.Query(1), E)
+
+	s.Insert(1)
+
+	assert.InEpsilon(t, 1, s.Query(0), E)
+	assert.InEpsilon(t, 2, s.Query(1), E)
+
+	s.Insert(1.5)
+
+	assert.InEpsilon(t, 1, s.Query(0), E)
+	assert.InEpsilon(t, 1.5, s.Query(0.5), E)
+	assert.InEpsilon(t, 2, s.Query(1), E)
+
+	//	t.Logf("s: %+v", s)
+}
+
+func TestMerge(t *testing.T) {
+	const N, E = 100, 0.01
+
+	s1 := New(E)
+	s2 := New(E)
+	s3 := quantile.NewHighBiased(E)
+
+	n := N * s1.Size()
+
+	a := make([]float64, n)
+	for i := 0; i < n; i++ {
+		a[i] = rand.Float64()
+		a[i] *= a[i]
+
+		if a[i] < 0.5 {
+			s1.Insert(a[i])
+		} else {
+			s2.Insert(a[i])
+		}
+
+		s3.Insert(a[i])
+	}
+
+	sort.Float64s(a)
+
+	s1.Merge(s2.Samples())
+
+	var l1, l2, l3, ms float64
+	for q0 := 0.0001; q0 < 1.05; q0 += 0.07 {
+		if q0 > 1 {
+			q0 = 1
+		}
+
+		q := math.Sqrt(q0)
+
+		gt := int(q * float64(len(a)))
+		if gt >= len(a) {
+			gt = len(a) - 1
+		}
+
+		v := s1.Query(q)
+		v2 := s2.Query(q)
+		v3 := s3.Query(q)
+
+		l1 += sqr(v - a[gt])
+		l2 += sqr(v2 - a[gt])
+		l3 += sqr(v3 - a[gt])
+		ms++
+
+		over := ""
+		if abs(v-a[gt]) >= E {
+			over = "  <----"
+		}
+
+		t.Logf("q %9.4f => %8.4f  gt %8.4f  diff %8.5f  s3 %8.4f  diff3 %8.5f  s2 %.4f %v", q, v, a[gt], v-a[gt], v3, v-v3, v2, over)
+	}
+
+	l1 = math.Sqrt(l1 / ms)
+	l2 = math.Sqrt(l2 / ms)
+	l3 = math.Sqrt(l3 / ms)
+
+	t.Logf("l2(me-gt) %.4f   l3(s2-gt) %.4f   l2(high-gt) %.4f", l1, l3, l2)
+}
 
 func TestQuantile(t *testing.T) {
 	const N, E = 1000, 0.01
@@ -28,6 +117,7 @@ func TestQuantile(t *testing.T) {
 	a := make([]float64, n)
 	for i := 0; i < n; i++ {
 		a[i] = rand.Float64()
+		a[i] *= a[i]
 
 		s.Insert(a[i])
 
@@ -40,8 +130,18 @@ func TestQuantile(t *testing.T) {
 	sort.Float64s(a)
 
 	var l1, l2, ms float64
-	for q := 0.0001; q <= 1.; q += 0.05 {
+	for q0 := 0.0001; q0 < 1.05; q0 += 0.05 {
+		if q0 > 1 {
+			q0 = 1
+		}
+
+		q := math.Sqrt(q0)
+
 		gt := int(q * float64(len(a)))
+		if gt >= len(a) {
+			gt = len(a) - 1
+		}
+
 		v := s.Query(q)
 		v2 := s2.Query(q)
 
@@ -64,7 +164,7 @@ func TestQuantile(t *testing.T) {
 }
 
 func TestPrecision(t *testing.T) {
-	const N = 1 << 10
+	const N = 1 << 19
 	gt := make([]float64, N)
 
 	for _, e := range []float64{0.1, 0.01} {
@@ -86,7 +186,7 @@ func TestPrecision(t *testing.T) {
 					if abs(v-exp) > 2*e {
 						t.Logf("quantile out of epsilon: q %.4f  v %.4f  gt %.4f  diff %7.4f   eps %.4f  n %7v", q, v, exp, v-exp, e, i)
 					} else {
-						t.Logf("quantile                 q %.4f  v %.4f  gt %.4f  diff %7.4f   eps %.4f  n %7v", q, v, exp, v-exp, e, i)
+						//	t.Logf("quantile                 q %.4f  v %.4f  gt %.4f  diff %7.4f   eps %.4f  n %7v", q, v, exp, v-exp, e, i)
 					}
 
 					d += sqr(v - exp)
@@ -95,7 +195,7 @@ func TestPrecision(t *testing.T) {
 
 				d = math.Sqrt(d / ms)
 
-				if d > e {
+				if d >= e {
 					t.Errorf("mean error of epsilon: %.4f   eps %.4f", d, e)
 				}
 			}
