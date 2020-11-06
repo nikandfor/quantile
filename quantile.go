@@ -61,6 +61,10 @@ func (s *Stream) Query(q float64) float64 {
 		n = s.total
 	}
 
+	if n == 0 {
+		return 0
+	}
+
 	t := q*s.sum + e
 
 	var cum float64

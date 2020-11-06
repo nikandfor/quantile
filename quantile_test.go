@@ -17,6 +17,8 @@ func TestSmallSet(t *testing.T) {
 
 	s := New(E)
 
+	assert.Equal(t, 0.0, s.Query(0))
+
 	s.Insert(2)
 
 	assert.InEpsilon(t, 2, s.Query(0), E)
