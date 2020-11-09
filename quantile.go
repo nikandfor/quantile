@@ -164,6 +164,20 @@ func (s *Stream) compress() {
 
 		if e.Weight != 0 {
 			e.Value /= e.Weight
+		} else {
+			//	fmt.Fprintf(os.Stderr, "w %d r %d i %v b %v l(v) %v t %v cum %v step %v v[r] %v vs %v\n", w, r, s.i, s.b, len(s.v), t, cum, step, s.v[r], s.v)
+
+			//	panic("zero weight")
+
+			if w > 0 {
+				e.Value = s.v[w-1].Value
+				e.Weight = s.v[w-1].Weight / 2
+				s.v[w-1].Weight /= 2
+			} else if r > 0 {
+				e.Value = s.v[r-1].Value
+			} else {
+				e.Value = s.v[r].Value
+			}
 		}
 
 		//		fmt.Fprintf(os.Stderr, "step %10.4f  cum %10.4f (q %.4f)  el_w %4d: %8.4f  el_r %4d: %8.4f\n", t, cum, cum/totsum, w, e, r, s.v[or:r])
