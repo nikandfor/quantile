@@ -1,3 +1,5 @@
+//go:build ignore
+
 // This is my implementation of quantile inspired by github.com/beorn7/perks/quantile,
 // consulting paper
 // A Fast Algorithm for Approximate Quantiles in High Speed Data Streams
