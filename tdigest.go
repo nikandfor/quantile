@@ -42,6 +42,8 @@ type (
 	HighBias     float32
 	LowBias      float32
 	ExtremesBias float32
+
+	InvariantFunc func(q float32) float32
 )
 
 func NewHighBiased(eps float32, size int) *TDigest[HighBias] {
@@ -84,6 +86,10 @@ func New[Inv Invariant](size int) *TDigest[Inv] {
 
 		Decay: 1,
 	}
+}
+
+func (s *TDigest[B]) Reset() {
+	s.i = 0
 }
 
 func (s *TDigest[B]) Query(q float64) float64 {
@@ -338,4 +344,8 @@ func (eps LowBias) Inv(q float32) float32 {
 
 func (eps ExtremesBias) Inv(q float32) float32 {
 	return 4 * q * (1 - q) * float32(eps)
+}
+
+func (f InvariantFunc) Inv(q float32) float32 {
+	return f(q)
 }
