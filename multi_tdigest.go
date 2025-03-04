@@ -2,7 +2,7 @@ package quantile
 
 import "sort"
 
-func Query[Inv Invariant](q float64, ss ...*TDigest[Inv]) float64 {
+func Query(q float64, ss ...*TDigest) float64 {
 	var res [1]float64
 
 	QueryMulti([]float64{q}, res[:], ss...)
@@ -10,7 +10,7 @@ func Query[Inv Invariant](q float64, ss ...*TDigest[Inv]) float64 {
 	return res[0]
 }
 
-func QueryMulti[Inv Invariant](qs, res []float64, ss ...*TDigest[Inv]) {
+func QueryMulti(qs, res []float64, ss ...*TDigest) {
 	if len(qs) == 0 || len(ss) == 0 {
 		for i := range qs {
 			res[i] = 0
@@ -48,8 +48,8 @@ func QueryMulti[Inv Invariant](qs, res []float64, ss ...*TDigest[Inv]) {
 		return
 	}
 
-	first := func() *TDigest[Inv] {
-		var f *TDigest[Inv]
+	first := func() *TDigest {
+		var f *TDigest
 
 		for _, s := range ss {
 			if s.j >= s.i {
@@ -64,7 +64,7 @@ func QueryMulti[Inv Invariant](qs, res []float64, ss ...*TDigest[Inv]) {
 		return f
 	}
 
-	var last *TDigest[Inv]
+	var last *TDigest
 
 	qi := 0
 

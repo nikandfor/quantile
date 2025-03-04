@@ -12,10 +12,10 @@ import (
 )
 
 type (
-	TDigest[Inv Invariant] struct {
+	TDigest struct {
 		tdigest
 
-		Invariant Inv
+		Invariant Invariant
 		Decay     float32
 
 		ElementsReduced   float32
@@ -35,6 +35,8 @@ type (
 		sorted bool
 	}
 
+	sorter tdigest
+
 	Invariant interface {
 		Inv(q float32) float32
 	}
@@ -46,37 +48,26 @@ type (
 	InvariantFunc func(q float32) float32
 )
 
-func NewHighBiased(eps float32, size int) *TDigest[HighBias] {
-	return newTDigest[HighBias](eps, size)
+func NewHighBiased(eps float32, size int) *TDigest {
+	return New(HighBias(eps), size)
 }
 
-func NewLowBiased(eps float32, size int) *TDigest[LowBias] {
-	return newTDigest[LowBias](eps, size)
+func NewLowBiased(eps float32, size int) *TDigest {
+	return New(LowBias(eps), size)
 }
 
-func NewExtremesBiased(eps float32, size int) *TDigest[ExtremesBias] {
-	return newTDigest[ExtremesBias](eps, size)
-}
-
-func newTDigest[Inv interface {
-	~float32
-	Invariant
-}](eps float32, size int) *TDigest[Inv] {
-	s := New[Inv](size)
-
-	s.Invariant = Inv(eps)
-
-	return s
+func NewExtremesBiased(eps float32, size int) *TDigest {
+	return New(ExtremesBias(eps), size)
 }
 
 // NewTDigest creates a new tdigest stream.
 // 512 is a good size to start with.
-func New[Inv Invariant](size int) *TDigest[Inv] {
+func New(inv Invariant, size int) *TDigest {
 	if size%2 != 0 {
 		panic(size)
 	}
 
-	return &TDigest[Inv]{
+	return &TDigest{
 		tdigest: tdigest{
 			v: make([]float64, size),
 			w: make([]float32, size),
@@ -84,15 +75,16 @@ func New[Inv Invariant](size int) *TDigest[Inv] {
 			size: size,
 		},
 
-		Decay: 1,
+		Invariant: inv,
+		Decay:     1,
 	}
 }
 
-func (s *TDigest[B]) Reset() {
+func (s *TDigest) Reset() {
 	s.i = 0
 }
 
-func (s *TDigest[B]) Query(q float64) float64 {
+func (s *TDigest) Query(q float64) float64 {
 	var buf [1]float64
 
 	s.QueryMulti([]float64{q}, buf[:])
@@ -103,7 +95,7 @@ func (s *TDigest[B]) Query(q float64) float64 {
 // QueryMulti make multiple queries at once.
 // qs is a list of queries (quantiles).
 // res is a buffer for results, res[i] = Query(qs[i]).
-func (s *TDigest[B]) QueryMulti(qs, res []float64) {
+func (s *TDigest) QueryMulti(qs, res []float64) {
 	if s.i == 0 || len(qs) == 0 {
 		for i := range qs {
 			res[i] = 0
@@ -192,13 +184,13 @@ func (s *TDigest[B]) QueryMulti(qs, res []float64) {
 	}
 }
 
-func (s *TDigest[B]) interpolate(x, x1, x2 float32, y1, y2 float64) float64 {
+func (s *TDigest) interpolate(x, x1, x2 float32, y1, y2 float64) float64 {
 	k := float64(x-x1) / float64(x2-x1)
 
 	return y1*(1-k) + y2*k
 }
 
-func (s *TDigest[B]) Insert(v float64) {
+func (s *TDigest) Insert(v float64) {
 	if math.IsNaN(v) {
 		return
 	}
@@ -214,7 +206,7 @@ func (s *TDigest[B]) Insert(v float64) {
 	s.i++
 }
 
-func (s *TDigest[B]) compress() {
+func (s *TDigest) compress() {
 	if !s.sorted {
 		s.sort()
 	}
@@ -245,7 +237,7 @@ func (s *TDigest[B]) compress() {
 	}
 }
 
-func (s *TDigest[B]) compress0() {
+func (s *TDigest) compress0() {
 	var total float32
 
 	for _, w := range s.w[:s.i] {
@@ -291,7 +283,7 @@ func (s *TDigest[B]) compress0() {
 	//	log.Printf("light\nv: %5.2f\nw: %5.2f\ntotal %.0f -> %.0f", s.v[:s.i], s.w[:s.i], total, sum+s.w[l])
 }
 
-func (s *TDigest[B]) compressBrute() {
+func (s *TDigest) compressBrute() {
 	if s.i%2 != 0 {
 		panic(s.i)
 	}
@@ -307,11 +299,11 @@ func (s *TDigest[B]) compressBrute() {
 	s.i /= 2
 }
 
-func (s *TDigest[B]) canBeMerged(l, r float64) bool {
+func (s *TDigest) canBeMerged(l, r float64) bool {
 	return !math.IsInf(l, 0) && !math.IsInf(r, 0) || l == r
 }
 
-func (s *TDigest[B]) dump() string {
+func (s *TDigest) dump() string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%.2f\n", s.v[:s.i])
@@ -320,14 +312,15 @@ func (s *TDigest[B]) dump() string {
 	return b.String()
 }
 
-func (s *TDigest[B]) sort() {
-	sort.Sort(&s.tdigest)
+func (s *TDigest) sort() {
+	sort.Sort((*sorter)(&s.tdigest))
+
 	s.sorted = true
 }
 
-func (s *tdigest) Len() int           { return s.i }
-func (s *tdigest) Less(i, j int) bool { return s.v[i] < s.v[j] }
-func (s *tdigest) Swap(i, j int) {
+func (s *sorter) Len() int           { return s.i }
+func (s *sorter) Less(i, j int) bool { return s.v[i] < s.v[j] }
+func (s *sorter) Swap(i, j int) {
 	s.v[i], s.v[j] = s.v[j], s.v[i]
 	s.w[i], s.w[j] = s.w[j], s.w[i]
 }

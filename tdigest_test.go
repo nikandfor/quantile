@@ -113,7 +113,7 @@ func BenchmarkTDigestQuery(tb *testing.B) {
 	}
 }
 
-func assertTDigest[Inv Invariant](tb testing.TB, e *Exact, s *TDigest[Inv], q float64) {
+func assertTDigest(tb testing.TB, e *Exact, s *TDigest, q float64) {
 	tb.Helper()
 
 	ext := e.Query(q)

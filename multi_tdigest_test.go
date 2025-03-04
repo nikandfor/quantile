@@ -12,7 +12,7 @@ func TestMulti(tb *testing.T) {
 
 	split := []float64{0.3, 0.6, 0.9, 1}
 
-	ss := make([]*TDigest[ExtremesBias], len(split))
+	ss := make([]*TDigest, len(split))
 
 	for i := range ss {
 		ss[i] = NewExtremesBiased(0.05, W)
