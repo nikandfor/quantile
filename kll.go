@@ -20,7 +20,7 @@ type (
 
 func NewKLL(width, depth int) *KLL {
 	if width%2 != 0 {
-		//		panic(width)
+		panic(width)
 	}
 
 	return &KLL{

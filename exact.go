@@ -65,3 +65,5 @@ func (s *Exact) dump() string {
 
 	return b.String()
 }
+
+var _ = (*Exact)(nil).dump
