@@ -7,13 +7,16 @@ import (
 	"testing"
 )
 
-var tdbenchW = []int{128, 512, 2048}
+var (
+	tdbenchW = []int{128, 512, 2048}
+	tdbenchE = []float32{0.1, 0.03, 0.01}
+)
 
 func TestTDigest(tb *testing.T) {
 	const W = 16
 
 	e := NewExact()
-	s := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
+	s := NewExtremesBiased(0.1, W)
 
 	assertTDigest(tb, e, s, 0)
 
@@ -41,31 +44,35 @@ func TestTDigest(tb *testing.T) {
 
 func BenchmarkTDigestInsert(tb *testing.B) {
 	for _, W := range tdbenchW {
-		tb.Run(fmt.Sprintf("W%d", W), func(tb *testing.B) {
-			tb.ReportAllocs()
+		for _, E := range tdbenchE {
+			tb.Run(fmt.Sprintf("W%d_E%.3f", W, E), func(tb *testing.B) {
+				tb.ReportAllocs()
 
-			src := rand.NewChaCha8([32]byte{})
-			r := rand.New(src)
+				src := rand.NewChaCha8([32]byte{})
+				r := rand.New(src)
 
-			//	e := NewExact()
-			s := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
+				//	e := NewExact()
+				s := NewExtremesBiased(E, W)
 
-			for i := 0; i < tb.N; i++ {
-				v := r.Float64()
-				//		e.Insert(v)
-				s.Insert(v)
-			}
+				for i := 0; i < tb.N; i++ {
+					v := r.Float64()
+					//		e.Insert(v)
+					s.Insert(v)
+				}
 
-			//	assertTDigest(tb, e, s, 0)
-			//	assertTDigest(tb, e, s, 0.1)
-			//	assertTDigest(tb, e, s, 0.5)
-			//	assertTDigest(tb, e, s, 0.9)
-			//	assertTDigest(tb, e, s, 1)
+				//	assertTDigest(tb, e, s, 0)
+				//	assertTDigest(tb, e, s, 0.1)
+				//	assertTDigest(tb, e, s, 0.5)
+				//	assertTDigest(tb, e, s, 0.9)
+				//	assertTDigest(tb, e, s, 1)
 
-			if tb.Failed() {
-				tb.Logf("dump\n%v", s.dump())
-			}
-		})
+				tb.Logf("stats: compressions %v / %v,  average reduction %v / %v", s.Compressions, s.BruteCompressions, s.ElementsReduced, s.size)
+
+				if tb.Failed() {
+					tb.Logf("dump\n%v", s.dump())
+				}
+			})
+		}
 	}
 }
 
@@ -78,7 +85,7 @@ func BenchmarkTDigestQuery(tb *testing.B) {
 			r := rand.New(src)
 
 			e := NewExact()
-			s := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
+			s := NewExtremesBiased(0.1, W)
 
 			for range int(1e6) {
 				v := r.Float64()

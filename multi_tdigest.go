@@ -2,15 +2,15 @@ package quantile
 
 import "sort"
 
-func TDigestQuery[Inv Invariant](q float64, ss ...*TDigest[Inv]) float64 {
+func Query[Inv Invariant](q float64, ss ...*TDigest[Inv]) float64 {
 	var res [1]float64
 
-	TDigestQueryMulti([]float64{q}, res[:], ss...)
+	QueryMulti([]float64{q}, res[:], ss...)
 
 	return res[0]
 }
 
-func TDigestQueryMulti[Inv Invariant](qs, res []float64, ss ...*TDigest[Inv]) {
+func QueryMulti[Inv Invariant](qs, res []float64, ss ...*TDigest[Inv]) {
 	if len(qs) == 0 || len(ss) == 0 {
 		for i := range qs {
 			res[i] = 0

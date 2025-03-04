@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestMultiTDigest(tb *testing.T) {
+func TestMulti(tb *testing.T) {
 	const W, N = 32 * 5, 1000
 
 	split := []float64{0.3, 0.6, 0.9, 1}
@@ -15,7 +15,7 @@ func TestMultiTDigest(tb *testing.T) {
 	ss := make([]*TDigest[ExtremesBias], len(split))
 
 	for i := range ss {
-		ss[i] = NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
+		ss[i] = NewExtremesBiased(0.05, W)
 	}
 
 	src := rand.NewChaCha8([32]byte{})
@@ -42,7 +42,7 @@ func TestMultiTDigest(tb *testing.T) {
 	pt := func(q float64) {
 		e := ext.Query(q)
 
-		t := TDigestQuery(q, ss...)
+		t := Query(q, ss...)
 
 		d := math.Abs(e - t)
 		dt += d * d

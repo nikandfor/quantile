@@ -1,4 +1,4 @@
-package quantile
+package kll
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ var (
 func TestKLL(tb *testing.T) {
 	const W, D = 32, 10
 
-	s := NewKLL(W, D)
+	s := New(W, D)
 
 	assertKLL(tb, s, 0)
 
@@ -48,7 +48,7 @@ func BenchmarkKLLInsert(tb *testing.B) {
 				src := rand.NewChaCha8([32]byte{})
 				r := rand.New(src)
 
-				s := NewKLL(W, D)
+				s := New(W, D)
 
 				for i := 0; i < tb.N; i++ {
 					v := r.Float64()
@@ -78,7 +78,7 @@ func BenchmarkKLLQuery(tb *testing.B) {
 				src := rand.NewChaCha8([32]byte{})
 				r := rand.New(src)
 
-				s := NewKLL(W, D)
+				s := New(W, D)
 
 				for range int(1e6) {
 					v := r.Float64()

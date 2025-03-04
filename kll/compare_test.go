@@ -1,10 +1,12 @@
-package quantile
+package kll
 
 import (
 	"math"
 	"math/rand/v2"
 	"sort"
 	"testing"
+
+	"nikand.dev/go/quantile"
 )
 
 func TestCompareUniform(tb *testing.T) {
@@ -22,35 +24,31 @@ func TestCompareNormal(tb *testing.T) {
 }
 
 func testCompare(tb *testing.T, rand func() float64) {
-	const W = 1024
-	const N = 1000 * W
+	const W, D = 32, 5
+	const N = 10000 * W * D
 
-	ext := NewExact()
-	td := NewExtremesBiased(0.01, W)
-	//	td := NewExtremesBiased(0.01, 2048)
-	td.Decay = 0.99
-
-	tb.Logf("size %v  eps %.5f", td.size, td.Invariant)
+	ext := quantile.NewExact()
+	kll := New(W, D)
 
 	for i := 0; i < N; i++ {
 		v := rand()
 
 		ext.Insert(v)
-		td.Insert(v)
+		kll.Insert(v)
 	}
 
-	var dt float64
+	var dk float64
 	var n int
 
 	pt := func(q float64) {
 		e := ext.Query(q)
 
-		t := td.Query(q)
+		k := kll.Query(q)
 
-		d := math.Abs(e - t)
-		dt += d * d
+		d := math.Abs(e - k)
+		dk += d * d
 
-		tb.Logf("q %.3f: exact %7.3f  tdigest %7.3f (%6.3f)", q, e, t, e-t)
+		tb.Logf("q %.3f: exact %7.3f  kll %7.3f (%6.3f)", q, e, k, e-k)
 
 		n++
 	}
@@ -67,9 +65,8 @@ func testCompare(tb *testing.T, rand func() float64) {
 		pt(q)
 	}
 
-	tb.Logf("stddev: tdigest %.5f", math.Sqrt(dt/float64(n)))
+	tb.Logf("stddev: kll %.5f", math.Sqrt(dk/float64(n)))
 
 	//	tb.Logf("exact dump\n%v", ext.dump())
-	tb.Logf("tdigest dump\n%v", td.dump())
-	tb.Logf("tdigest stats: compressions %v / %v,  average reduction %v / %v", td.Compressions, td.BruteCompressions, td.ElementsReduced, td.size)
+	tb.Logf("kll dump\n%v", kll.dump())
 }

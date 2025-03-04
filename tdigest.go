@@ -1,6 +1,7 @@
 package quantile
 
 // Base on clickhouse implementation by Alexei Borzenkov (https://github.com/snaury).
+//
 // https://github.com/ClickHouse/ClickHouse/blob/master/src/AggregateFunctions/QuantileTDigest.h
 
 import (
@@ -43,26 +44,15 @@ type (
 	ExtremesBias float32
 )
 
-const epsSize = 4 * 1024
-
-func TDigestSize(eps float32) int {
-	size := int(eps) * epsSize
-	return size &^ 1
-}
-
-func TDigestEpsilon(size int) float32 {
-	return float32(size) / epsSize
-}
-
-func NewHighBiasedTDigest(eps float32, size int) *TDigest[HighBias] {
+func NewHighBiased(eps float32, size int) *TDigest[HighBias] {
 	return newTDigest[HighBias](eps, size)
 }
 
-func NewLowBiasedTDigest(eps float32, size int) *TDigest[LowBias] {
+func NewLowBiased(eps float32, size int) *TDigest[LowBias] {
 	return newTDigest[LowBias](eps, size)
 }
 
-func NewExtremesBiasedTDigest(eps float32, size int) *TDigest[ExtremesBias] {
+func NewExtremesBiased(eps float32, size int) *TDigest[ExtremesBias] {
 	return newTDigest[ExtremesBias](eps, size)
 }
 
@@ -70,7 +60,7 @@ func newTDigest[Inv interface {
 	~float32
 	Invariant
 }](eps float32, size int) *TDigest[Inv] {
-	s := NewTDigest[Inv](size)
+	s := New[Inv](size)
 
 	s.Invariant = Inv(eps)
 
@@ -79,7 +69,7 @@ func newTDigest[Inv interface {
 
 // NewTDigest creates a new tdigest stream.
 // 512 is a good size to start with.
-func NewTDigest[Inv Invariant](size int) *TDigest[Inv] {
+func New[Inv Invariant](size int) *TDigest[Inv] {
 	if size%2 != 0 {
 		panic(size)
 	}
@@ -337,15 +327,15 @@ func (s *tdigest) Swap(i, j int) {
 }
 
 func (eps HighBias) Inv(q float32) float32 {
-	return 1.5 * (1 - q*q) * float32(eps)
+	return (1 - q*q) * float32(eps)
 }
 
 func (eps LowBias) Inv(q float32) float32 {
 	q = 1 - q
 
-	return 1.5 * (1 - q*q) * float32(eps)
+	return (1 - q*q) * float32(eps)
 }
 
 func (eps ExtremesBias) Inv(q float32) float32 {
-	return 6 * q * (1 - q) * float32(eps)
+	return 4 * q * (1 - q) * float32(eps)
 }
