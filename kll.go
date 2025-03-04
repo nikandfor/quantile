@@ -1,11 +1,15 @@
 package quantile
 
 import (
+	"fmt"
+	"math"
 	"sort"
+	"strings"
 )
 
 type (
-	Stream struct {
+	// KLL is kll-like streaming quantile algorithm.
+	KLL struct {
 		v []float64
 		l []int
 		s []bool
@@ -14,12 +18,12 @@ type (
 	}
 )
 
-func New(width, depth int) *Stream {
+func NewKLL(width, depth int) *KLL {
 	if width%2 != 0 {
 		//		panic(width)
 	}
 
-	return &Stream{
+	return &KLL{
 		v: make([]float64, depth*width), // values
 		l: make([]int, depth),           // level length
 		s: make([]bool, depth),          // sorted
@@ -29,7 +33,7 @@ func New(width, depth int) *Stream {
 	}
 }
 
-func (s *Stream) Query(q float64) float64 {
+func (s *KLL) Query(q float64) float64 {
 	lo, hi, n := s.preQuery()
 	if q <= 0 {
 		return lo
@@ -60,7 +64,7 @@ func (s *Stream) Query(q float64) float64 {
 	return lo + (hi-lo)*q
 }
 
-func (s *Stream) rank(v, hi float64) (r int, x float64) {
+func (s *KLL) rank(v, hi float64) (r int, x float64) {
 	var xok bool
 
 	for l := 0; l < s.depth; l++ {
@@ -89,7 +93,7 @@ func (s *Stream) rank(v, hi float64) (r int, x float64) {
 	return r, x
 }
 
-func (s *Stream) preQuery() (lo, hi float64, n int) {
+func (s *KLL) preQuery() (lo, hi float64, n int) {
 	for l := 0; l < s.depth; l++ {
 		if s.l[l] == 0 {
 			break
@@ -128,7 +132,11 @@ func (s *Stream) preQuery() (lo, hi float64, n int) {
 	return lo, hi, n
 }
 
-func (s *Stream) Insert(v float64) {
+func (s *KLL) Insert(v float64) {
+	if math.IsNaN(v) {
+		return
+	}
+
 	if s.l[0] == s.width {
 		s.compact(0)
 	}
@@ -139,7 +147,7 @@ func (s *Stream) Insert(v float64) {
 	s.l[0]++
 }
 
-func (s *Stream) compact(l int) {
+func (s *KLL) compact(l int) {
 	if l+1 == s.depth {
 		s.l[l] = 0
 		return
@@ -176,12 +184,24 @@ func (s *Stream) compact(l int) {
 	s.l[l] = 0
 }
 
-func (s *Stream) sort(st, end int) {
+func (s *KLL) sort(st, end int) {
 	sort.Float64s(s.v[st:end])
 }
 
-func (s *Stream) startEnd(l int) (st, end int) {
+func (s *KLL) startEnd(l int) (st, end int) {
 	st = l * s.width
 	end = st + s.l[l]
 	return st, end
+}
+
+func (s *KLL) dump() string {
+	var b strings.Builder
+
+	for l := range s.depth {
+		st, end := s.startEnd(l)
+
+		fmt.Fprintf(&b, "dump l %2x: %.2f\n", l, s.v[st:end])
+	}
+
+	return b.String()
 }
