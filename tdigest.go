@@ -17,9 +17,9 @@ type (
 		Invariant Inv
 		Decay     float32
 
-		CompressedElements float32
-		Compressions       int
-		BruteCompressions  int
+		ElementsReduced   float32
+		Compressions      int
+		BruteCompressions int
 	}
 
 	tdigest struct {
@@ -43,7 +43,7 @@ type (
 	ExtremesBias float32
 )
 
-const epsSize = 8 * 1024
+const epsSize = 4 * 1024
 
 func TDigestSize(eps float32) int {
 	size := int(eps) * epsSize
@@ -230,7 +230,7 @@ func (s *TDigest[B]) compress() {
 
 	const a = 0.97
 
-	s.CompressedElements = s.CompressedElements*a + float32(s.size-s.i)*(1-a)
+	s.ElementsReduced = s.ElementsReduced*a + float32(s.size-s.i)*(1-a)
 
 	if s.i != s.size {
 		//		log.Printf("light\nv: %5.2f\nw: %5.2f\n", s.v[:s.i], s.w[:s.i])
@@ -337,15 +337,15 @@ func (s *tdigest) Swap(i, j int) {
 }
 
 func (eps HighBias) Inv(q float32) float32 {
-	return (1 - q*q) * float32(eps)
+	return 1.5 * (1 - q*q) * float32(eps)
 }
 
 func (eps LowBias) Inv(q float32) float32 {
 	q = 1 - q
 
-	return (1 - q*q) * float32(eps)
+	return 1.5 * (1 - q*q) * float32(eps)
 }
 
 func (eps ExtremesBias) Inv(q float32) float32 {
-	return 4 * q * (1 - q) * float32(eps)
+	return 6 * q * (1 - q) * float32(eps)
 }

@@ -27,7 +27,7 @@ func testCompare(tb *testing.T, rand func() float64) {
 
 	ext := NewExact()
 	kll := NewKLL(W, D)
-	td := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
+	td := NewExtremesBiasedTDigest(TDigestEpsilon(W*D), W*D)
 	td.Decay = 0.99
 
 	for i := 0; i < N; i++ {
@@ -75,4 +75,6 @@ func testCompare(tb *testing.T, rand func() float64) {
 	//	tb.Logf("exact dump\n%v", ext.dump())
 	tb.Logf("kll dump\n%v", kll.dump())
 	tb.Logf("tdigest dump\n%v", td.dump())
+
+	tb.Logf("tdigest stats: compressions %v / %v,  average reduction %v / %v", td.Compressions, td.BruteCompressions, td.ElementsReduced, td.size)
 }
