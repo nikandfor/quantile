@@ -50,7 +50,7 @@ func BenchmarkTDigestInsert(tb *testing.B) {
 			//	e := NewExact()
 			s := NewTDigest(W, TDigestEpsilon(W))
 
-			for tb.Loop() {
+			for i := 0; i < tb.N; i++ {
 				v := r.Float64()
 				//		e.Insert(v)
 				s.Insert(v)
@@ -88,7 +88,7 @@ func BenchmarkTDigestQuery(tb *testing.B) {
 
 			tb.ResetTimer()
 
-			for tb.Loop() {
+			for i := 0; i < tb.N; i++ {
 				q := r.Float64()
 				_ = s.Query(q)
 			}

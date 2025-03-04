@@ -50,7 +50,7 @@ func BenchmarkKLLInsert(tb *testing.B) {
 
 				s := NewKLL(W, D)
 
-				for tb.Loop() {
+				for i := 0; i < tb.N; i++ {
 					v := r.Float64()
 					s.Insert(v)
 				}
@@ -87,7 +87,7 @@ func BenchmarkKLLQuery(tb *testing.B) {
 
 				tb.ResetTimer()
 
-				for tb.Loop() {
+				for i := 0; i < tb.N; i++ {
 					q := r.Float64()
 					_ = s.Query(q)
 				}
