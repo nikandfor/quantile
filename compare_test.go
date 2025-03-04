@@ -27,7 +27,7 @@ func testCompare(tb *testing.T, rand func() float64) {
 
 	ext := NewExact()
 	kll := NewKLL(W, D)
-	td := NewTDigest(W*D, TDigestEpsilon(W*D))
+	td := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
 	td.Decay = 0.99
 
 	for i := 0; i < N; i++ {

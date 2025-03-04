@@ -13,7 +13,7 @@ func TestTDigest(tb *testing.T) {
 	const W = 16
 
 	e := NewExact()
-	s := NewTDigest(W, TDigestEpsilon(W))
+	s := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
 
 	assertTDigest(tb, e, s, 0)
 
@@ -48,7 +48,7 @@ func BenchmarkTDigestInsert(tb *testing.B) {
 			r := rand.New(src)
 
 			//	e := NewExact()
-			s := NewTDigest(W, TDigestEpsilon(W))
+			s := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
 
 			for i := 0; i < tb.N; i++ {
 				v := r.Float64()
@@ -78,7 +78,7 @@ func BenchmarkTDigestQuery(tb *testing.B) {
 			r := rand.New(src)
 
 			e := NewExact()
-			s := NewTDigest(W, TDigestEpsilon(W))
+			s := NewExtremesBiasedTDigest(TDigestEpsilon(W), W)
 
 			for range int(1e6) {
 				v := r.Float64()
@@ -106,7 +106,7 @@ func BenchmarkTDigestQuery(tb *testing.B) {
 	}
 }
 
-func assertTDigest(tb testing.TB, e *Exact, s *TDigest, q float64) {
+func assertTDigest[Inv Invariant](tb testing.TB, e *Exact, s *TDigest[Inv], q float64) {
 	tb.Helper()
 
 	ext := e.Query(q)

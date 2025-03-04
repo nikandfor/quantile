@@ -11,13 +11,15 @@ import (
 )
 
 type (
-	TDigest struct {
+	TDigest[Inv Invariant] struct {
 		tdigest
 
-		Decay float32
+		Invariant Inv
+		Decay     float32
 
-		Compressions      int
-		BruteCompressions int
+		CompressedElements float32
+		Compressions       int
+		BruteCompressions  int
 	}
 
 	tdigest struct {
@@ -27,10 +29,18 @@ type (
 		i    int
 		size int
 
-		eps float32
+		j int // for multi-streams query
 
 		sorted bool
 	}
+
+	Invariant interface {
+		Inv(q float32) float32
+	}
+
+	HighBias     float32
+	LowBias      float32
+	ExtremesBias float32
 )
 
 const epsSize = 8 * 1024
@@ -44,28 +54,49 @@ func TDigestEpsilon(size int) float32 {
 	return float32(size) / epsSize
 }
 
+func NewHighBiasedTDigest(eps float32, size int) *TDigest[HighBias] {
+	return newTDigest[HighBias](eps, size)
+}
+
+func NewLowBiasedTDigest(eps float32, size int) *TDigest[LowBias] {
+	return newTDigest[LowBias](eps, size)
+}
+
+func NewExtremesBiasedTDigest(eps float32, size int) *TDigest[ExtremesBias] {
+	return newTDigest[ExtremesBias](eps, size)
+}
+
+func newTDigest[Inv interface {
+	~float32
+	Invariant
+}](eps float32, size int) *TDigest[Inv] {
+	s := NewTDigest[Inv](size)
+
+	s.Invariant = Inv(eps)
+
+	return s
+}
+
 // NewTDigest creates a new tdigest stream.
 // 512 is a good size to start with.
-// TDigestEpsilon(size) is a good epsilon to start with.
-func NewTDigest(size int, eps float32) *TDigest {
+func NewTDigest[Inv Invariant](size int) *TDigest[Inv] {
 	if size%2 != 0 {
 		panic(size)
 	}
 
-	return &TDigest{
+	return &TDigest[Inv]{
 		tdigest: tdigest{
 			v: make([]float64, size),
 			w: make([]float32, size),
 
 			size: size,
-			eps:  eps,
 		},
 
 		Decay: 1,
 	}
 }
 
-func (s *TDigest) Query(q float64) float64 {
+func (s *TDigest[B]) Query(q float64) float64 {
 	var buf [1]float64
 
 	s.QueryMulti([]float64{q}, buf[:])
@@ -76,7 +107,7 @@ func (s *TDigest) Query(q float64) float64 {
 // QueryMulti make multiple queries at once.
 // qs is a list of queries (quantiles).
 // res is a buffer for results, res[i] = Query(qs[i]).
-func (s *TDigest) QueryMulti(qs, res []float64) {
+func (s *TDigest[B]) QueryMulti(qs, res []float64) {
 	if s.i == 0 || len(qs) == 0 {
 		for i := range qs {
 			res[i] = 0
@@ -165,13 +196,13 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 	}
 }
 
-func (s *TDigest) interpolate(x, x1, x2 float32, y1, y2 float64) float64 {
+func (s *TDigest[B]) interpolate(x, x1, x2 float32, y1, y2 float64) float64 {
 	k := float64(x-x1) / float64(x2-x1)
 
 	return y1*(1-k) + y2*k
 }
 
-func (s *TDigest) Insert(v float64) {
+func (s *TDigest[B]) Insert(v float64) {
 	if math.IsNaN(v) {
 		return
 	}
@@ -187,7 +218,7 @@ func (s *TDigest) Insert(v float64) {
 	s.i++
 }
 
-func (s *TDigest) compress() {
+func (s *TDigest[B]) compress() {
 	if !s.sorted {
 		s.sort()
 	}
@@ -196,6 +227,10 @@ func (s *TDigest) compress() {
 
 	s.compress0()
 	s.Compressions++
+
+	const a = 0.97
+
+	s.CompressedElements = s.CompressedElements*a + float32(s.size-s.i)*(1-a)
 
 	if s.i != s.size {
 		//		log.Printf("light\nv: %5.2f\nw: %5.2f\n", s.v[:s.i], s.w[:s.i])
@@ -214,14 +249,12 @@ func (s *TDigest) compress() {
 	}
 }
 
-func (s *TDigest) compress0() {
+func (s *TDigest[B]) compress0() {
 	var total float32
 
 	for _, w := range s.w[:s.i] {
 		total += w
 	}
-
-	totalEpsilon4 := total * s.eps * 4
 
 	l, r := 0, 1
 
@@ -234,12 +267,7 @@ func (s *TDigest) compress0() {
 		ql := (sum + s.w[l]*0.5) / total
 		qr := (sum + s.w[l] + s.w[r]*0.5) / total
 
-		err := ql * (1 - ql)
-		if err2 := qr * (1 - qr); err2 < err {
-			err = err2
-		}
-
-		k := err * totalEpsilon4
+		k := min(s.Invariant.Inv(ql), s.Invariant.Inv(qr)) * total
 
 		//	log.Printf("pair  l %3v r %3v  w %5.2f %5.2f  q %.2f %.2f  err %.2f %.2f  k %.3f  merge %v", l, r, s.w[l], s.w[r], ql, qr, ql*(1-ql), qr*(1-qr), k, s.w[l]+s.w[r] <= k)
 
@@ -267,7 +295,7 @@ func (s *TDigest) compress0() {
 	//	log.Printf("light\nv: %5.2f\nw: %5.2f\ntotal %.0f -> %.0f", s.v[:s.i], s.w[:s.i], total, sum+s.w[l])
 }
 
-func (s *TDigest) compressBrute() {
+func (s *TDigest[B]) compressBrute() {
 	if s.i%2 != 0 {
 		panic(s.i)
 	}
@@ -283,11 +311,11 @@ func (s *TDigest) compressBrute() {
 	s.i /= 2
 }
 
-func (s *TDigest) canBeMerged(l, r float64) bool {
+func (s *TDigest[B]) canBeMerged(l, r float64) bool {
 	return !math.IsInf(l, 0) && !math.IsInf(r, 0) || l == r
 }
 
-func (s *TDigest) dump() string {
+func (s *TDigest[B]) dump() string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%.2f\n", s.v[:s.i])
@@ -296,7 +324,7 @@ func (s *TDigest) dump() string {
 	return b.String()
 }
 
-func (s *TDigest) sort() {
+func (s *TDigest[B]) sort() {
 	sort.Sort(&s.tdigest)
 	s.sorted = true
 }
@@ -306,4 +334,18 @@ func (s *tdigest) Less(i, j int) bool { return s.v[i] < s.v[j] }
 func (s *tdigest) Swap(i, j int) {
 	s.v[i], s.v[j] = s.v[j], s.v[i]
 	s.w[i], s.w[j] = s.w[j], s.w[i]
+}
+
+func (eps HighBias) Inv(q float32) float32 {
+	return (1 - q*q) * float32(eps)
+}
+
+func (eps LowBias) Inv(q float32) float32 {
+	q = 1 - q
+
+	return (1 - q*q) * float32(eps)
+}
+
+func (eps ExtremesBias) Inv(q float32) float32 {
+	return 4 * q * (1 - q) * float32(eps)
 }
