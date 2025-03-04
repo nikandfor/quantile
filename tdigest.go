@@ -44,6 +44,9 @@ func TDigestEpsilon(size int) float32 {
 	return float32(size) / epsSize
 }
 
+// NewTDigest creates a new tdigest stream.
+// 512 is a good size to start with.
+// TDigestEpsilon(size) is a good epsilon to start with.
 func NewTDigest(size int, eps float32) *TDigest {
 	if size%2 != 0 {
 		panic(size)
@@ -63,23 +66,38 @@ func NewTDigest(size int, eps float32) *TDigest {
 }
 
 func (s *TDigest) Query(q float64) float64 {
-	if s.i == 0 {
-		return 0
+	var buf [1]float64
+
+	s.QueryMulti([]float64{q}, buf[:])
+
+	return buf[0]
+}
+
+// QueryMulti make multiple queries at once.
+// qs is a list of queries (quantiles).
+// res is a buffer for results, res[i] = Query(qs[i]).
+func (s *TDigest) QueryMulti(qs, res []float64) {
+	if s.i == 0 || len(qs) == 0 {
+		for i := range qs {
+			res[i] = 0
+		}
+
+		return
 	}
 	if s.i == 1 {
-		return s.v[0]
+		for i := range qs {
+			res[i] = s.v[0]
+		}
+
+		return
 	}
 
 	if !s.sorted {
 		s.sort()
 	}
 
-	if q <= 0 {
-		return s.v[0]
-	}
-	if q >= 1 {
-		return s.v[s.i-1]
-	}
+	copy(res, qs)
+	sort.Float64s(res[:len(qs)])
 
 	var total, sum, prev float32
 
@@ -87,10 +105,26 @@ func (s *TDigest) Query(q float64) float64 {
 		total += w
 	}
 
-	target := float32(q) * total
+	qi := 0
+
+	for qi < len(qs) && res[qi] <= 0 {
+		res[qi] = s.v[0]
+		qi++
+	}
+
+	for qi < len(qs) && res[qi] >= 1 {
+		res[qi] = s.v[s.i-1]
+		qi++
+	}
+
+	if qi == len(qs) {
+		return
+	}
+
+	target := float32(res[qi]) * total
 	prevV := s.v[0]
 
-	for i := 0; i < s.i; i++ {
+	for i := 0; i < s.i; {
 		cur := sum + 0.5*s.w[i]
 
 		//	log.Printf("query %.2f  i %2d  cur %.3f / %.3f  v %.2f", q, i, cur, target, s.v[i])
@@ -99,23 +133,36 @@ func (s *TDigest) Query(q float64) float64 {
 			l := prev
 			r := cur
 
-			if target <= l {
-				return prevV
-			}
-			if target >= r {
-				return s.v[i]
+			switch {
+			case target <= l:
+				res[qi] = prevV
+			case target >= r:
+				res[qi] = s.v[i]
+			default:
+				res[qi] = s.interpolate(cur, l, r, prevV, s.v[i])
 			}
 
-			return s.interpolate(cur, l, r, prevV, s.v[i])
+			qi++
+
+			if qi == len(qs) {
+				break
+			}
+
+			continue
 		}
 
 		sum += s.w[i]
 
 		prev = cur
 		prevV = s.v[i]
+
+		i++
 	}
 
-	return s.v[s.i-1]
+	for qi < len(qs) {
+		res[qi] = s.v[s.i-1]
+		qi++
+	}
 }
 
 func (s *TDigest) interpolate(x, x1, x2 float32, y1, y2 float64) float64 {
