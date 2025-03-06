@@ -1,6 +1,6 @@
 package quantile
 
-// Base on clickhouse implementation by Alexei Borzenkov (https://github.com/snaury).
+// Based on clickhouse implementation by Alexei Borzenkov (https://github.com/snaury).
 //
 // https://github.com/ClickHouse/ClickHouse/blob/master/src/AggregateFunctions/QuantileTDigest.h
 
@@ -48,21 +48,21 @@ type (
 	InvariantFunc func(q float32) float32
 )
 
-func NewHighBiased(eps float32, size int) *TDigest {
-	return New(HighBias(eps), size)
+func NewTDHighBiased(eps float32, size int) *TDigest {
+	return NewTD(HighBias(eps), size)
 }
 
-func NewLowBiased(eps float32, size int) *TDigest {
-	return New(LowBias(eps), size)
+func NewTDLowBiased(eps float32, size int) *TDigest {
+	return NewTD(LowBias(eps), size)
 }
 
-func NewExtremesBiased(eps float32, size int) *TDigest {
-	return New(ExtremesBias(eps), size)
+func NewTDExtremesBiased(eps float32, size int) *TDigest {
+	return NewTD(ExtremesBias(eps), size)
 }
 
 // NewTDigest creates a new tdigest stream.
 // 512 is a good size to start with.
-func New(inv Invariant, size int) *TDigest {
+func NewTD(inv Invariant, size int) *TDigest {
 	if size%2 != 0 {
 		panic(size)
 	}
@@ -118,10 +118,10 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 	copy(res, qs)
 	sort.Float64s(res[:len(qs)])
 
-	var total, sum, prev float32
+	var total, sum, prev float64
 
 	for _, w := range s.w[:s.i] {
-		total += w
+		total += float64(w)
 	}
 
 	qi := 0
@@ -140,11 +140,11 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 		return
 	}
 
-	target := float32(res[qi]) * total
+	target := float64(res[qi]) * total
 	prevV := s.v[0]
 
 	for i := 0; i < s.i; {
-		cur := sum + 0.5*s.w[i]
+		cur := sum + 0.5*float64(s.w[i])
 
 		//	log.Printf("query %.2f  i %2d  cur %.3f / %.3f  v %.2f", q, i, cur, target, s.v[i])
 
@@ -170,7 +170,7 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 			continue
 		}
 
-		sum += s.w[i]
+		sum += float64(s.w[i])
 
 		prev = cur
 		prevV = s.v[i]
@@ -184,26 +184,71 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 	}
 }
 
-func (s *TDigest) interpolate(x, x1, x2 float32, y1, y2 float64) float64 {
+func (s *TDigest) interpolate(x, x1, x2 float64, y1, y2 float64) float64 {
 	k := float64(x-x1) / float64(x2-x1)
 
 	return y1*(1-k) + y2*k
 }
 
 func (s *TDigest) Insert(v float64) {
+	s.InsertWeighted(v, 1)
+}
+
+func (s *TDigest) InsertWeighted(v float64, w float32) {
 	if math.IsNaN(v) {
 		return
 	}
 
-	if s.i == s.size {
+	if s.i >= s.size {
 		s.compress()
 	}
 
 	s.v[s.i] = v
-	s.w[s.i] = 1
+	s.w[s.i] = w
 
 	s.sorted = s.i == 0 || s.sorted && v > s.v[s.i-1]
 	s.i++
+}
+
+func (s *TDigest) Merge(s1 *TDigest) {
+	s.MergeWeighted(s1, 1, 1)
+}
+
+func (s *TDigest) MergeWeighted(s1 *TDigest, w0, w1 float32) {
+	s.mergeWeighted(s1, w0, w1)
+}
+
+func (s *TDigest) mergeWeighted(s1 *TDigest, w0, w1 float32) {
+	s.AdjustWeights(w0)
+
+	i := s.i
+
+	if w0 <= 0 {
+		i = 0
+	}
+
+	s.v = append(s.v[:i], s1.v[:s1.i]...)
+	s.w = append(s.w[:i], s1.w[:s1.i]...)
+
+	s.i = i + s1.i
+
+	s.adjustWeights(w1, i, s.i)
+}
+
+func (s *TDigest) AdjustWeights(multiply float32) {
+	s.adjustWeights(multiply, 0, s.i)
+}
+
+func (s *TDigest) adjustWeights(multiply float32, st, end int) {
+	if multiply == 1 {
+		return
+	}
+
+	_ = s.w[st:end]
+
+	for i := st; i < end; i++ {
+		s.w[i] *= multiply
+	}
 }
 
 func (s *TDigest) compress() {
@@ -220,7 +265,7 @@ func (s *TDigest) compress() {
 
 	s.ElementsReduced = s.ElementsReduced*a + float32(s.size-s.i)*(1-a)
 
-	if s.i != s.size {
+	if s.i < s.size {
 		//		log.Printf("light\nv: %5.2f\nw: %5.2f\n", s.v[:s.i], s.w[:s.i])
 		return
 	}

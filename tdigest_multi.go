@@ -2,15 +2,17 @@ package quantile
 
 import "sort"
 
-func Query(q float64, ss ...*TDigest) float64 {
+type TDMulti []*TDigest
+
+func (ss TDMulti) Query(q float64) float64 {
 	var res [1]float64
 
-	QueryMulti([]float64{q}, res[:], ss...)
+	ss.QueryMulti([]float64{q}, res[:])
 
 	return res[0]
 }
 
-func QueryMulti(qs, res []float64, ss ...*TDigest) {
+func (ss TDMulti) QueryMulti(qs, res []float64) {
 	if len(qs) == 0 || len(ss) == 0 {
 		for i := range qs {
 			res[i] = 0
@@ -28,12 +30,12 @@ func QueryMulti(qs, res []float64, ss ...*TDigest) {
 		}
 	}
 
-	var total, sum, prev float32
+	var total, sum, prev float64
 	var n int
 
 	for _, s := range ss {
 		for _, w := range s.w[:s.i] {
-			total += w
+			total += float64(w)
 		}
 
 		n += s.i
@@ -68,7 +70,7 @@ func QueryMulti(qs, res []float64, ss ...*TDigest) {
 
 	qi := 0
 
-	target := float32(res[qi]) * total
+	target := res[qi] * total
 	prevV := first().v[0]
 
 	for {
@@ -77,7 +79,7 @@ func QueryMulti(qs, res []float64, ss ...*TDigest) {
 			break
 		}
 
-		cur := sum + 0.5*s.w[s.j]
+		cur := sum + 0.5*float64(s.w[s.j])
 
 		if cur >= target {
 			l := prev
@@ -101,7 +103,7 @@ func QueryMulti(qs, res []float64, ss ...*TDigest) {
 			continue
 		}
 
-		sum += s.w[s.j]
+		sum += float64(s.w[s.j])
 
 		prev = cur
 		prevV = s.v[s.j]

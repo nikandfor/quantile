@@ -1,4 +1,4 @@
-package kll
+package quantile
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ type (
 	}
 )
 
-func New(width, depth int) *KLL {
+func NewKLL(width, depth int) *KLL {
 	if width%2 != 0 {
 		panic(width)
 	}

@@ -7,69 +7,103 @@ import (
 	"testing"
 )
 
-func TestCompareUniform(tb *testing.T) {
-	src := rand.NewChaCha8([32]byte{})
-	r := rand.New(src)
-
-	testCompare(tb, r.Float64)
+type Stream interface {
+	Insert(v float64)
+	Query(q float64) float64
 }
 
-func TestCompareNormal(tb *testing.T) {
-	src := rand.NewChaCha8([32]byte{})
-	r := rand.New(src)
-
-	testCompare(tb, r.NormFloat64)
-}
-
-func testCompare(tb *testing.T, rand func() float64) {
-	const W = 1024
-	const N = 1000 * W
+func testCompare(tb *testing.T, rand func() float64, ss ...Stream) {
+	const N = 100000
 
 	ext := NewExact()
-	td := NewExtremesBiased(0.01, W)
-	//	td := NewExtremesBiased(0.01, 2048)
-	td.Decay = 0.99
-
-	tb.Logf("size %v  eps %.5f", td.size, td.Invariant)
 
 	for i := 0; i < N; i++ {
 		v := rand()
 
 		ext.Insert(v)
-		td.Insert(v)
+
+		for _, s := range ss {
+			s.Insert(v)
+		}
 	}
 
-	var dt float64
-	var n int
+	qs := []float64{1, 0, 0.5}
 
-	pt := func(q float64) {
-		e := ext.Query(q)
-
-		t := td.Query(q)
-
-		d := math.Abs(e - t)
-		dt += d * d
-
-		tb.Logf("q %.3f: exact %7.3f  tdigest %7.3f (%6.3f)", q, e, t, e-t)
-
-		n++
-	}
-
-	qs := []float64{0.5}
-
-	for q := 0.01; q < 0.5; q += q / 2 {
+	for q := 0.01; q < 0.5; q += q * 2 / 3 {
 		qs = append(qs, q, 1-q)
 	}
 
 	sort.Float64s(qs)
 
+	vv := make([]float64, len(ss))
+	dd := make([]float64, len(ss))
+	ds := make([]float64, len(ss))
+	cnt := 0
+
 	for _, q := range qs {
-		pt(q)
+		e := ext.Query(q)
+
+		for j, s := range ss {
+			v := s.Query(q)
+
+			vv[j] = v
+			dd[j] = e - v
+			ds[j] += math.Abs(dd[j] * dd[j])
+		}
+
+		tb.Logf("quantile %7.3f: exact %9.4f  v %9.4f  d %9.4f", q, e, vv, dd)
+
+		cnt++
 	}
 
-	tb.Logf("stddev: tdigest %.5f", math.Sqrt(dt/float64(n)))
+	a := ext.Query(1)
 
-	//	tb.Logf("exact dump\n%v", ext.dump())
-	tb.Logf("tdigest dump\n%v", td.dump())
-	tb.Logf("tdigest stats: compressions %v / %v,  average reduction %v / %v", td.Compressions, td.BruteCompressions, td.ElementsReduced, td.size)
+	for j, d := range ds {
+		dv := math.Sqrt(d / float64(cnt))
+
+		tb.Logf("stddev abs %7.4f (rel %7.4f)  %T", dv, dv/a, ss[j])
+	}
+}
+
+func benchInsert(tb *testing.B, s Stream) {
+	tb.ReportAllocs()
+
+	src := rand.NewChaCha8([32]byte{})
+	r := rand.New(src)
+
+	vs := make([]float64, tb.N)
+
+	for i := 0; i < tb.N; i++ {
+		vs[i] = r.Float64()
+	}
+
+	tb.ResetTimer()
+
+	for i := 0; i < tb.N; i++ {
+		s.Insert(vs[i])
+	}
+}
+
+func benchQuery(tb *testing.B, s Stream) {
+	tb.ReportAllocs()
+
+	src := rand.NewChaCha8([32]byte{})
+	r := rand.New(src)
+
+	for range int(1e6) {
+		v := r.Float64()
+		s.Insert(v)
+	}
+
+	vs := make([]float64, tb.N)
+
+	for i := 0; i < tb.N; i++ {
+		vs[i] = r.Float64()
+	}
+
+	tb.ResetTimer()
+
+	for i := 0; i < tb.N; i++ {
+		_ = s.Query(vs[i])
+	}
 }

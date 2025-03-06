@@ -1,4 +1,4 @@
-package kll
+package quantile
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ var (
 func TestKLL(tb *testing.T) {
 	const W, D = 32, 10
 
-	s := New(W, D)
+	s := NewKLL(W, D)
 
 	assertKLL(tb, s, 0)
 
@@ -39,27 +39,31 @@ func TestKLL(tb *testing.T) {
 	}
 }
 
-func BenchmarkKLLInsert(tb *testing.B) {
+func TestCompareUniformKLL(tb *testing.T) {
+	src := rand.NewChaCha8([32]byte{})
+	r := rand.New(src)
+
+	s := NewKLL(128, 8)
+
+	testCompare(tb, r.Float64, s)
+}
+
+func TestCompareNormalKLL(tb *testing.T) {
+	src := rand.NewChaCha8([32]byte{})
+	r := rand.New(src)
+
+	s := NewKLL(128, 8)
+
+	testCompare(tb, r.NormFloat64, s)
+}
+
+func BenchmarkInsertKLL(tb *testing.B) {
 	for _, W := range benchW {
 		for _, D := range benchD {
 			tb.Run(fmt.Sprintf("W%d_D%d", W, D), func(tb *testing.B) {
-				tb.ReportAllocs()
+				s := NewKLL(W, D)
 
-				src := rand.NewChaCha8([32]byte{})
-				r := rand.New(src)
-
-				s := New(W, D)
-
-				for i := 0; i < tb.N; i++ {
-					v := r.Float64()
-					s.Insert(v)
-				}
-
-				assertKLL(tb, s, 0)
-				assertKLL(tb, s, 0.1)
-				assertKLL(tb, s, 0.5)
-				assertKLL(tb, s, 0.9)
-				assertKLL(tb, s, 1)
+				benchInsert(tb, s)
 
 				if tb.Failed() {
 					tb.Logf("dump\n%v", s.dump())
@@ -69,34 +73,13 @@ func BenchmarkKLLInsert(tb *testing.B) {
 	}
 }
 
-func BenchmarkKLLQuery(tb *testing.B) {
+func BenchmarkQueryKLL(tb *testing.B) {
 	for _, W := range benchW {
 		for _, D := range benchD {
 			tb.Run(fmt.Sprintf("W%d_D%d", W, D), func(tb *testing.B) {
-				tb.ReportAllocs()
+				s := NewKLL(W, D)
 
-				src := rand.NewChaCha8([32]byte{})
-				r := rand.New(src)
-
-				s := New(W, D)
-
-				for range int(1e6) {
-					v := r.Float64()
-					s.Insert(v)
-				}
-
-				tb.ResetTimer()
-
-				for i := 0; i < tb.N; i++ {
-					q := r.Float64()
-					_ = s.Query(q)
-				}
-
-				assertKLL(tb, s, 0)
-				assertKLL(tb, s, 0.1)
-				assertKLL(tb, s, 0.5)
-				assertKLL(tb, s, 0.9)
-				assertKLL(tb, s, 1)
+				benchQuery(tb, s)
 
 				if tb.Failed() {
 					tb.Logf("dump\n%v", s.dump())
