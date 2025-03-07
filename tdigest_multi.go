@@ -81,6 +81,8 @@ func (ss TDMulti) QueryMulti(qs, res []float64) {
 
 		cur := sum + 0.5*float64(s.w[s.j])
 
+		//	log.Printf("querymulti %.2f  i %2d  cur %.3f / %.3f  v %.2f  w %.1f", res[qi], s.j, cur, target, s.v[s.j], s.w[s.j])
+
 		if cur >= target {
 			l := prev
 			r := cur
@@ -91,7 +93,7 @@ func (ss TDMulti) QueryMulti(qs, res []float64) {
 			case target >= r:
 				res[qi] = s.v[s.j]
 			default:
-				res[qi] = s.interpolate(cur, l, r, prevV, s.v[s.j])
+				res[qi] = s.interpolate(target, l, r, prevV, s.v[s.j])
 			}
 
 			qi++
@@ -99,6 +101,8 @@ func (ss TDMulti) QueryMulti(qs, res []float64) {
 			if qi == len(qs) {
 				break
 			}
+
+			target = res[qi] * total
 
 			continue
 		}

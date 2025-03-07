@@ -27,6 +27,38 @@ func TestTDMulti(tb *testing.T) {
 	}
 }
 
+func TestTDMulti10(tb *testing.T) {
+	e := NewExact()
+	ss := TDMulti{
+		NewTDExtremesBiased(0.01, 16),
+		NewTDExtremesBiased(0.01, 16),
+		NewTDExtremesBiased(0.01, 16),
+		NewTDExtremesBiased(0.01, 16),
+	}
+
+	for i, v := range []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1} {
+		e.Insert(v)
+
+		if i < 5 {
+			ss[0].Insert(v)
+		} else {
+			ss[1].Insert(v)
+		}
+	}
+
+	qs := []float64{0., 0.01, 0.1, 0.5, 0.9, 0.99, 1}
+
+	for _, q := range qs {
+		assertEqual(tb, e, ss, q, 0.02)
+	}
+
+	res := make([]float64, len(qs))
+
+	ss.QueryMulti(qs, res)
+
+	tb.Logf("multi: %v -> %v", qs, res)
+}
+
 func (s TDMulti) Insert(v float64) {
 	step := 1 / float64(len(s))
 	t := step

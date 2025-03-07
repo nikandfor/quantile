@@ -140,13 +140,13 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 		return
 	}
 
-	target := float64(res[qi]) * total
+	target := res[qi] * total
 	prevV := s.v[0]
 
 	for i := 0; i < s.i; {
 		cur := sum + 0.5*float64(s.w[i])
 
-		//	log.Printf("query %.2f  i %2d  cur %.3f / %.3f  v %.2f", q, i, cur, target, s.v[i])
+		//	log.Printf("query %.2f  i %2d  cur %.3f / %.3f  v %.2f  w %.1f", res[qi], i, cur, target, s.v[i], s.w[i])
 
 		if cur >= target {
 			l := prev
@@ -158,7 +158,7 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 			case target >= r:
 				res[qi] = s.v[i]
 			default:
-				res[qi] = s.interpolate(cur, l, r, prevV, s.v[i])
+				res[qi] = s.interpolate(target, l, r, prevV, s.v[i])
 			}
 
 			qi++
@@ -166,6 +166,8 @@ func (s *TDigest) QueryMulti(qs, res []float64) {
 			if qi == len(qs) {
 				break
 			}
+
+			target = res[qi] * total
 
 			continue
 		}
